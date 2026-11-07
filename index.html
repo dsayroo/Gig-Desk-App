@@ -1,4 +1,4 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -122,10 +122,11 @@ const SECTIONS = [
    {k:'dayContact', label:'Day-of contact (name & phone)', type:'text', req:1},
    {k:'planner', label:'Planner or coordinator (name & phone)', type:'text'}]},
  {key:'entrances', title:'Grand entrances', blurb:'Who walks in, in what order, and to which songs.', fields:[
-   {k:'style', label:'Entrance style', type:'select', req:1, opts:['Full wedding party / court, in pairs','Parents + wedding party / court','Guests of honor only','No announced entrance']},
+   {k:'style', label:'Entrance style', type:'select', req:1, opts:['Full wedding party / court, in pairs','Parents + wedding party / court','Group entrances (several groups walk in together)','Guests of honor only','No announced entrance']},
    {k:'partySong', label:'Wedding party / court entrance song', type:'song'},
    {k:'honoreeSong', label:'Guest of honor entrance song', type:'song', req:1},
-   {k:'order', label:'Entrance order (first in → last in)', type:'list', cols:[{k:'names',label:'Names',ph:'Maria Lopez & James Park'},{k:'role',label:'Role',ph:'Maid of honor & best man'},{k:'pron',label:'Pronunciation',ph:'optional'}]}]},
+   {k:'order', label:'Entrance order (first in → last in)', type:'list', cols:[{k:'names',label:'Names',ph:'Maria Lopez & James Park'},{k:'role',label:'Role',ph:'Maid of honor & best man'},{k:'pron',label:'Pronunciation',ph:'optional'}]},
+   {k:'groups', label:'Group entrances (first group in → last group in)', type:'list', cols:[{k:'group',label:'Group name',ph:'Bridesmaids, Groomsmen, Cousins'},{k:'who',label:'Who is in it',ph:'Maria, Dana & Sofia'},{k:'song',label:'Their song',ph:'optional · Song — Artist'}]}]},
  {key:'firstDance', title:'First dance', blurb:'The first dance, waltz or featured dance.', fields:[
    {k:'song', label:'Song & artist', type:'song', req:1},
    {k:'length', label:'How much of the song?', type:'select', req:1, opts:['Full song','Fade at about 2 minutes','Fade at about 3 minutes','Invite guests to join halfway']},
@@ -161,10 +162,10 @@ function filled(f, v){ if (f.type === 'list') return Array.isArray(v) && v.some(
 function secDone(key){ const s = SEC[key]; const d = A[key] || {}; const req = s.fields.filter(f => f.req); return req.length ? req.every(f => filled(f, d[f.k])) : s.fields.some(f => filled(f, d[f.k])); }
 
 /* ---------- gig from link ---------- */
-/* Link format: #CODE.SECTIONMASK.DUEYYMMDD.EVENTYYMMDD (mask bits follow SECTIONS order) */
+/* Link format: #CODE-SECTIONMASK-DUEYYMMDD-EVENTYYMMDD (mask bits follow SECTIONS order; '.' also accepted) */
 let G = null;
 try {
-  const h = decodeURIComponent(location.hash.slice(1)).trim(); const parts = h.split('.');
+  const h = decodeURIComponent(location.hash.slice(1)).trim(); const parts = h.split(/[.\-]/);
   if (/^[A-Za-z0-9]{4,10}$/.test(parts[0] || '')){
     const ymd = x => /^\d{6}$/.test(x || '') ? `20${x.slice(0, 2)}-${x.slice(2, 4)}-${x.slice(4, 6)}` : '';
     const mask = parts[1] ? parseInt(parts[1], 36) : NaN;
