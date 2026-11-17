@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>Request a Song</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700;12..96,800&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: one centred card — event name, request form, sent state. Dark-first for dim rooms. */
+:root{
+  --bg:#101119; --surface:#1A1C27; --surface-2:#232633; --ink:#F1F1F6; --muted:#A3A6B6; --line:#2E3242;
+  --accent:#FF7B30; --accent-ink:#1B0C03; --accent-soft:#3A2214; --ok:#40C985; --ok-soft:#12301F; --warn:#EFB042;
+  --display:'Bricolage Grotesque','Avenir Next','Segoe UI',system-ui,sans-serif;
+  --body:'IBM Plex Sans','Segoe UI',system-ui,-apple-system,sans-serif;
+  color-scheme:dark;
+}
+@media (prefers-color-scheme: light){:root:not([data-theme="dark"]){
+  --bg:#F2F1EE; --surface:#FFFFFF; --surface-2:#F7F6F3; --ink:#17181F; --muted:#5E6170; --line:#DEDCD6;
+  --accent:#D9540A; --accent-ink:#FFFFFF; --accent-soft:#FCE8DA; --ok:#17804F; --ok-soft:#DAF1E4; --warn:#9A5D00; color-scheme:light}}
+:root[data-theme="light"]{
+  --bg:#F2F1EE; --surface:#FFFFFF; --surface-2:#F7F6F3; --ink:#17181F; --muted:#5E6170; --line:#DEDCD6;
+  --accent:#D9540A; --accent-ink:#FFFFFF; --accent-soft:#FCE8DA; --ok:#17804F; --ok-soft:#DAF1E4; --warn:#9A5D00; color-scheme:light}
+*{box-sizing:border-box}
+html,body{background:var(--bg);color:var(--ink)}
+body{margin:0;font:16px/1.5 var(--body);padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+.wrap{max-width:520px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:28px 40px;display:flex;flex-direction:column;gap:18px}
+h1,h2{font-family:var(--display);line-height:1.1;margin:0;text-wrap:balance}
+h1{font-size:2rem;font-weight:800;letter-spacing:-.01em}
+h2{font-size:1.25rem;font-weight:800}
+p{margin:0}
+.muted{color:var(--muted)} .small{font-size:.88rem}
+.eyebrow{display:flex;align-items:center;gap:8px;font:700 .75rem var(--body);letter-spacing:.14em;text-transform:uppercase;color:var(--accent)}
+.eyebrow svg{width:20px;height:20px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:20px;display:flex;flex-direction:column;gap:14px}
+label{display:flex;flex-direction:column;gap:6px;font-size:.9rem;color:var(--muted);font-weight:500}
+input,textarea{font:400 1.05rem var(--body);color:var(--ink);background:var(--surface-2);border:1px solid var(--line);border-radius:12px;padding:13px 14px;width:100%}
+textarea{min-height:76px;resize:vertical}
+input:focus,textarea:focus{outline:none;border-color:var(--accent)}
+.req{color:var(--accent)}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;border:0;border-radius:12px;padding:15px 18px;font:700 1.05rem var(--body);cursor:pointer;width:100%;background:var(--accent);color:var(--accent-ink)}
+.btn[disabled]{opacity:.55;cursor:wait}
+.btn.ghost{background:var(--surface-2);color:var(--ink);border:1px solid var(--line)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.note{border-radius:12px;padding:12px 14px;font-size:.95rem;background:var(--accent-soft)}
+.sent{align-items:center;text-align:center;gap:12px}
+.check{width:64px;height:64px;border-radius:50%;background:var(--ok-soft);color:var(--ok);display:flex;align-items:center;justify-content:center}
+.check svg{width:32px;height:32px}
+.mine{display:flex;flex-direction:column;gap:6px}
+.mine div{display:flex;justify-content:space-between;gap:10px;font-size:.92rem;border-top:1px solid var(--line);padding-top:6px}
+.mine span:last-child{color:var(--muted);white-space:nowrap}
+.foot{text-align:center;font-size:.8rem;color:var(--muted)}
+@media (prefers-reduced-motion:no-preference){.check{animation:pop .35s ease-out}@keyframes pop{from{transform:scale(.6);opacity:0}}}
+</style>
+</head>
+<body>
+<div class="wrap" id="app"><div class="card"><p class="muted">Loading…</p></div></div>
+<script src="config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script>
+(() => {
+"use strict";
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const store = {get(k){ try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } }, set(k, v){ try { localStorage.setItem(k, JSON.stringify(v)); } catch {} }};
+const note = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>`;
+const tick = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>`;
+const code = decodeURIComponent(location.hash.slice(1)).trim();
+const cfg = window.GD_CONFIG || {};
+let device = store.get('gdrq.device'); if (!device){ device = Math.random().toString(36).slice(2) + Date.now().toString(36); store.set('gdrq.device', device); }
+const mineKey = 'gdrq.mine.' + code;
+const S = {ev: null, state: 'loading', last: null, draft: {song: '', artist: '', name: store.get('gdrq.name') || '', note: ''}, err: '', busy: false};
+let db = null;
+
+function fmtDate(s){ if (!s) return ''; const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d).toLocaleDateString('en-US', {weekday: 'long', month: 'long', day: 'numeric'}); }
+function head(){ return `<div class="eyebrow">${note}<span>Song requests</span></div><div><h1>${esc(S.ev?.name || 'Request a song')}</h1>${S.ev?.event_date ? `<p class="muted">${esc(fmtDate(S.ev.event_date))}</p>` : ''}</div>${S.ev?.welcome ? `<p>${esc(S.ev.welcome)}</p>` : ''}`; }
+function mine(){ const list = store.get(mineKey) || []; return list.length ? `<div class="card mine"><p class="small muted">Your requests tonight</p>${list.slice(-6).reverse().map(r => `<div><span>${esc(r.song)}${r.artist ? ' · ' + esc(r.artist) : ''}</span><span>${new Date(r.at).toLocaleTimeString('en-US', {hour: 'numeric', minute: '2-digit'})}</span></div>`).join('')}</div>` : ''; }
+function render(){
+  const app = $('#app');
+  if (S.state === 'nolink') return app.innerHTML = `<div class="card"><div class="eyebrow">${note}<span>Song requests</span></div><h2>Scan the QR code at the event</h2><p class="muted">This page opens from the code on the DJ's sign. Point your phone's camera at it to request a song.</p></div>`;
+  if (S.state === 'setup') return app.innerHTML = `<div class="card"><h2>Requests aren't set up yet</h2><p class="muted">The DJ hasn't finished connecting this page. Ask them, or try again in a bit.</p></div>`;
+  if (S.state === 'loading') return app.innerHTML = `<div class="card"><p class="muted">Loading…</p></div>`;
+  if (S.state === 'missing') return app.innerHTML = `<div class="card"><div class="eyebrow">${note}<span>Song requests</span></div><h2>We couldn't find this event</h2><p class="muted">Scan the code on the DJ's sign again. If it still doesn't work, ask the DJ.</p>${S.err ? `<p class="small muted">${esc(S.err)}</p>` : ''}<button class="btn ghost" data-act="retry">Try again</button></div>`;
+  if (S.state === 'closed' || (S.ev && !S.ev.is_open)) return app.innerHTML = `${head()}<div class="card"><h2>Requests are closed</h2><p class="muted">The DJ isn't taking requests right now. Enjoy the music!</p><button class="btn ghost" data-act="retry">Check again</button></div>${mine()}`;
+  if (S.state === 'sent') return app.innerHTML = `${head()}<div class="card sent"><div class="check">${tick}</div><h2>${S.last?.vote ? 'Added your vote!' : 'Request sent!'}</h2><p><b>${esc(S.last?.song)}</b>${S.last?.artist ? ' · ' + esc(S.last.artist) : ''}</p><p class="muted small">${S.last?.vote ? 'Someone already asked for this one, so it moves up the list.' : 'The DJ sees it now. No promises, but they’ll do their best.'}</p><button class="btn" data-act="again">Request another song</button></div>${mine()}<p class="foot">Powered by Gig Desk</p>`;
+  const d = S.draft;
+  app.innerHTML = `${head()}<form class="card" id="f" novalidate>
+    <label><span>Song <span class="req">*</span></span><input id="song" name="song" maxlength="120" autocomplete="off" required placeholder="September" value="${esc(d.song)}"></label>
+    <label>Artist<input id="artist" name="artist" maxlength="120" autocomplete="off" placeholder="Earth, Wind & Fire" value="${esc(d.artist)}"></label>
+    <label>Your name<input id="name" name="name" maxlength="60" autocomplete="given-name" placeholder="Optional" value="${esc(d.name)}"></label>
+    <label>Shout-out or dedication<textarea id="note" name="note" maxlength="200" placeholder="Optional · e.g. for Grandma's 80th!">${esc(d.note)}</textarea></label>
+    ${S.err ? `<div class="note" role="alert">${esc(S.err)}</div>` : ''}
+    <button class="btn" type="submit"${S.busy ? ' disabled' : ''}>${S.busy ? 'Sending…' : 'Send request'}</button>
+  </form>${mine()}<p class="foot">Powered by Gig Desk</p>`;
+}
+async function load(){
+  if (!code){ S.state = 'nolink'; return render(); }
+  if (!cfg.supabaseUrl || !cfg.supabaseAnonKey || !window.supabase){ S.state = 'setup'; return render(); }
+  db = db || window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseAnonKey, {auth: {persistSession: false}});
+  S.state = 'loading'; render();
+  const {data, error} = await db.rpc('rq_event_info', {p_code: code});
+  if (error){ S.state = 'missing'; S.err = 'Connection problem. Check your signal and try again.'; return render(); }
+  if (!data || !data.length){ S.state = 'missing'; S.err = ''; return render(); }
+  S.ev = data[0]; S.err = ''; S.state = S.ev.is_open ? 'form' : 'closed'; render();
+}
+document.addEventListener('input', e => { if (e.target.name && e.target.name in S.draft) S.draft[e.target.name] = e.target.value; });
+document.addEventListener('click', e => { const b = e.target.closest('[data-act]'); if (!b) return; if (b.dataset.act === 'retry') load(); if (b.dataset.act === 'again'){ S.state = 'form'; S.draft.song = ''; S.draft.artist = ''; S.draft.note = ''; render(); $('#song')?.focus(); } });
+document.addEventListener('submit', async e => {
+  e.preventDefault(); if (S.busy) return; const d = S.draft;
+  if (!d.song.trim()){ S.err = 'Type the song you want to hear.'; render(); $('#song')?.focus(); return; }
+  S.busy = true; S.err = ''; render(); store.set('gdrq.name', d.name.trim());
+  const {data, error} = await db.rpc('rq_submit', {p_code: code, p_song: d.song.trim(), p_artist: d.artist.trim(), p_name: d.name.trim(), p_note: d.note.trim(), p_device: device});
+  S.busy = false;
+  if (error){ S.err = 'Couldn’t send. Check your signal and try again.'; return render(); }
+  const msg = {closed: 'The DJ just closed requests.', not_found: 'This event isn’t taking requests anymore.', invalid: 'Check the song name and try again.', slow_down: 'You’ve sent a lot of requests. Give it a few minutes, then try again.', busy: 'The DJ has a lot of requests right now. Try again in a little while.'}[data];
+  if (data === 'closed'){ S.ev.is_open = false; S.state = 'closed'; return render(); }
+  if (msg){ S.err = msg; return render(); }
+  const list = store.get(mineKey) || []; list.push({song: d.song.trim(), artist: d.artist.trim(), at: Date.now()}); store.set(mineKey, list.slice(-20));
+  S.last = {song: d.song.trim(), artist: d.artist.trim(), vote: data === 'added_vote'}; S.state = 'sent'; render();
+});
+load();
+})();
+</script>
+</body>
+</html>

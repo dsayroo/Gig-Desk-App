@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>Gig Desk Requests</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700;12..96,800&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@500;700&display=swap">
+<style>
+/* Layout: booth board — sticky header, event bar, status tabs, request cards with one-tap actions. Dark-first for the booth. */
+:root{
+  --bg:#0E1016; --surface:#171A23; --surface-2:#1D212D; --ink:#ECEEF4; --muted:#9BA2B5; --line:#2A3042;
+  --accent:#FF7B30; --accent-ink:#1B0C03; --accent-soft:#3A2214; --live:#FF5266; --live-soft:#3A1720; --ok:#40C985; --ok-soft:#12301F; --warn:#EFB042; --warn-soft:#33270E;
+  --display:'Bricolage Grotesque','Avenir Next','Segoe UI',system-ui,sans-serif; --body:'IBM Plex Sans','Segoe UI',system-ui,sans-serif; --mono:'JetBrains Mono',ui-monospace,Menlo,monospace;
+  color-scheme:dark;
+}
+@media (prefers-color-scheme: light){:root:not([data-theme="dark"]){
+  --bg:#ECEEF3; --surface:#FFFFFF; --surface-2:#F5F6F9; --ink:#141620; --muted:#596074; --line:#D7DBE5;
+  --accent:#D9540A; --accent-ink:#FFFFFF; --accent-soft:#FCE8DA; --live:#CF2338; --live-soft:#FBE2E5; --ok:#17804F; --ok-soft:#DAF1E4; --warn:#9A5D00; --warn-soft:#FAEFD6; color-scheme:light}}
+:root[data-theme="light"]{
+  --bg:#ECEEF3; --surface:#FFFFFF; --surface-2:#F5F6F9; --ink:#141620; --muted:#596074; --line:#D7DBE5;
+  --accent:#D9540A; --accent-ink:#FFFFFF; --accent-soft:#FCE8DA; --live:#CF2338; --live-soft:#FBE2E5; --ok:#17804F; --ok-soft:#DAF1E4; --warn:#9A5D00; --warn-soft:#FAEFD6; color-scheme:light}
+*{box-sizing:border-box}
+html,body{background:var(--bg);color:var(--ink)}
+body{margin:0;font:15px/1.5 var(--body);padding-bottom:env(safe-area-inset-bottom,0px)}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--surface)}
+h1,h2,h3{font-family:var(--display);line-height:1.15;margin:0;text-wrap:balance}
+h1{font-size:1.5rem;font-weight:800} h2{font-size:1.15rem;font-weight:800} h3{font-size:1rem}
+p{margin:0}
+.muted{color:var(--muted)} .small{font-size:.84rem} .mono{font-family:var(--mono)}
+.lbl{font-size:.7rem;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);font-weight:600}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--surface);border-bottom:1px solid var(--line)}
+.in{max-width:980px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.top .in{display:flex;align-items:center;gap:12px;padding-block:10px;flex-wrap:wrap}
+.brand{font:800 1rem var(--display);letter-spacing:.03em;display:flex;gap:8px;align-items:center}
+.brand svg{width:22px;height:22px;color:var(--accent)}
+.sp{margin-left:auto}
+main.in{padding-block:18px 60px;display:flex;flex-direction:column;gap:16px}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:12px;min-width:0}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.spread{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
+label.f{display:flex;flex-direction:column;gap:4px;font-size:.8rem;color:var(--muted);font-weight:500}
+input,select,textarea{font:400 .95rem var(--body);color:var(--ink);background:var(--surface-2);border:1px solid var(--line);border-radius:8px;padding:9px 11px;width:100%;min-width:0}
+textarea{min-height:110px;resize:vertical}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent)}
+input[type=checkbox]{width:18px;height:18px;accent-color:var(--accent)}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;border:1px solid var(--line);background:var(--surface);color:var(--ink);font:600 .9rem var(--body);padding:9px 14px;border-radius:8px;cursor:pointer;white-space:nowrap;text-decoration:none}
+.btn.pri{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.ok{background:var(--ok-soft);border-color:transparent;color:var(--ok)}
+.btn.ghost{background:none;border-color:transparent;color:var(--muted)}
+.btn.sm{padding:6px 10px;font-size:.82rem}
+.btn.danger{color:var(--live)}
+.btn[disabled]{opacity:.5;cursor:not-allowed}
+.pill{display:inline-flex;align-items:center;gap:5px;font:600 .72rem var(--body);padding:2px 9px;border-radius:999px;background:var(--surface-2);color:var(--muted);white-space:nowrap}
+.pill.ok{background:var(--ok-soft);color:var(--ok)} .pill.live{background:var(--live-soft);color:var(--live)} .pill.acc{background:var(--accent-soft);color:var(--ink)} .pill.warn{background:var(--warn-soft);color:var(--warn)}
+.tabs{display:flex;gap:2px;border-bottom:1px solid var(--line);overflow-x:auto}
+.tabs button{background:none;border:0;border-bottom:2px solid transparent;color:var(--muted);font:600 .92rem var(--body);padding:10px 12px;cursor:pointer;white-space:nowrap}
+.tabs button.on{color:var(--ink);border-bottom-color:var(--accent)}
+.count{display:inline-block;min-width:20px;padding:0 6px;margin-left:4px;border-radius:9px;background:var(--surface-2);font:700 .72rem/20px var(--mono);text-align:center}
+.tabs button.on .count{background:var(--accent);color:var(--accent-ink)}
+.rq{display:grid;grid-template-columns:52px minmax(0,1fr) auto;gap:12px;align-items:center;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+.rq.bad{border-color:var(--live);box-shadow:inset 4px 0 0 var(--live)}
+.rq.fresh{box-shadow:inset 4px 0 0 var(--accent)}
+.votes{text-align:center;font:800 1.4rem var(--display);line-height:1}
+.votes span{display:block;font:600 .62rem var(--body);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-top:3px}
+.rq .t{font-weight:600;font-size:1.02rem;overflow-wrap:anywhere}
+.rq .meta{font-size:.84rem;color:var(--muted);overflow-wrap:anywhere}
+.rq .acts{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+@media (max-width:560px){.rq{grid-template-columns:44px minmax(0,1fr)}.rq .acts{grid-column:1/-1;justify-content:flex-start}}
+.warnline{font-size:.84rem;color:var(--live);font-weight:600}
+.empty{text-align:center;color:var(--muted);padding:32px 12px}
+.qrwrap{display:flex;gap:16px;align-items:center;flex-wrap:wrap}
+.qrwrap canvas{background:#fff;border-radius:8px;padding:8px;width:156px;height:156px;image-rendering:pixelated}
+.link{font-family:var(--mono);font-size:.8rem;overflow-wrap:anywhere;user-select:all;background:var(--surface-2);padding:8px 10px;border-radius:8px}
+.auth{max-width:420px;margin:40px auto 0}
+.note{background:var(--warn-soft);border-radius:8px;padding:10px 12px;font-size:.9rem}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(16px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:8px;font-size:.9rem;z-index:20;max-width:calc(100% - 32px)}
+.evchips{display:flex;gap:6px;overflow-x:auto;padding-bottom:2px}
+.evchips button{flex:none;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:999px;padding:6px 12px;font:600 .84rem var(--body);cursor:pointer}
+.evchips button.on{background:var(--accent-soft);border-color:var(--accent)}
+details summary{cursor:pointer;font-weight:600}
+@media (prefers-reduced-motion:no-preference){.rq.fresh{animation:flash 1.2s ease-out}@keyframes flash{0%{background:var(--accent-soft)}}}
+</style>
+</head>
+<body>
+<div id="app"><div class="in" style="padding-top:40px"><p class="muted">Loading…</p></div></div>
+<script src="config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
+<script>
+(() => {
+"use strict";
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const store = {get(k){ try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } }, set(k, v){ try { localStorage.setItem(k, JSON.stringify(v)); } catch {} }};
+const cfg = window.GD_CONFIG || {};
+const logo = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>`;
+
+/* same do-not-play matching as Gig Desk */
+const nrm = s => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\([^)]*\)|\[[^\]]*\]/g, ' ').replace(/\b(feat|ft|featuring)\b.*$/, ' ').replace(/&/g, ' and ').replace(/[^a-z0-9]+/g, ' ').trim();
+function parseReq(raw){ const s = String(raw || '').replace(/[“”"]/g, '').trim(); const p = s.split(/\s+[—–-]\s+|\s*[—–]\s*/).map(x => x.trim()).filter(Boolean); const song = p.length >= 2 ? p[0] : '', artist = p.length >= 2 ? p.slice(1).join(' ') : ''; return {raw: s, ns: nrm(song), na: nrm(artist), nq: nrm(s)}; }
+const lines = t => String(t || '').split(/\n|;/).map(x => x.replace(/^\s*(?:[-•*x]|\d+[.)])\s+/, '').trim()).filter(Boolean);
+function hits(r, nq){ if (!nq || nq.length < 2) return false; if (r.ns && r.na) return (r.ns.length >= 3 && nq.includes(r.ns)) || (nq.length >= 4 && r.ns.includes(nq)); return !!r.nq && ((r.nq.length >= 3 && (' ' + nq + ' ').includes(' ' + r.nq + ' ')) || (nq.length >= 4 && r.nq === nq)); }
+const dirty = s => /\b(explicit|dirty|uncensored)\b/i.test(s);
+
+const S = {session: null, events: [], evId: store.get('gdrq.ev') || '', reqs: [], tab: 'new', view: 'board', loading: true, authMode: 'signin', authErr: '', busy: false, seen: new Set(), fresh: new Set(), confirm: '', wake: null, buzz: store.get('gdrq.buzz') ?? true, live: 'connecting'};
+let db = null, chan = null, poll = null;
+
+function toast(t){ let el = $('#toast'); if (!el){ el = document.createElement('div'); el.id = 'toast'; el.className = 'toast'; el.setAttribute('role', 'status'); document.body.appendChild(el); } el.textContent = t; clearTimeout(el._t); el._t = setTimeout(() => el.remove(), 3200); }
+const ev = () => S.events.find(e => e.id === S.evId);
+const guestUrl = id => new URL('r.html', location.href).href.split('#')[0] + '#' + id;
+const ago = t => { const s = Math.max(0, (Date.now() - new Date(t).getTime()) / 1000); return s < 60 ? 'just now' : s < 3600 ? Math.floor(s / 60) + ' min ago' : new Date(t).toLocaleTimeString('en-US', {hour: 'numeric', minute: '2-digit'}); };
+
+/* ---------- render ---------- */
+function shell(body){
+  return `<header class="top"><div class="in"><span class="brand">${logo}GIG DESK REQUESTS</span>${S.session ? `<span class="pill ${S.live === 'live' ? 'ok' : 'warn'}" title="Live updates">${S.live === 'live' ? '● Live' : '○ Reconnecting'}</span><span class="sp small muted">${esc(S.session.user.email)}</span><button class="btn ghost sm" data-act="signout">Sign out</button>` : ''}</div></header><main class="in">${body}</main>`;
+}
+function authView(){
+  if (S.authMode === 'recover') return `<form class="panel auth" id="setpw"><h1>Set a new password</h1><label class="f">New password<input id="pw1" type="password" autocomplete="new-password" minlength="8" required></label>${S.authErr ? `<div class="note">${esc(S.authErr)}</div>` : ''}<button class="btn pri" type="submit">Save password</button></form>`;
+  if (S.authMode === 'forgot') return `<form class="panel auth" id="forgot"><h1>Reset your password</h1><p class="muted small">We'll email you a link to set a new one.</p><label class="f">Email<input id="em" type="email" autocomplete="email" required></label>${S.authErr ? `<div class="note">${esc(S.authErr)}</div>` : ''}<button class="btn pri" type="submit"${S.busy ? ' disabled' : ''}>Send reset link</button><button class="btn ghost" type="button" data-act="mode" data-arg="signin">Back to sign in</button></form>`;
+  return `<form class="panel auth" id="signin"><h1>Sign in</h1><p class="muted small">Your live song requests from guests.</p><label class="f">Email<input id="em" type="email" autocomplete="email" required></label><label class="f">Password<input id="pw" type="password" autocomplete="current-password" required></label>${S.authErr ? `<div class="note">${esc(S.authErr)}</div>` : ''}<button class="btn pri" type="submit"${S.busy ? ' disabled' : ''}>${S.busy ? 'Signing in…' : 'Sign in'}</button><button class="btn ghost" type="button" data-act="mode" data-arg="forgot">Forgot password?</button></form>`;
+}
+function eventForm(e){
+  const isNew = !e; const v = e || {name: '', event_date: '', welcome: '', dnp: '', clean_only: false};
+  return `<form class="panel" id="evform" data-id="${esc(e?.id || '')}"><div class="spread"><h2>${isNew ? 'New request event' : 'Event settings'}</h2>${S.events.length ? `<button class="btn ghost sm" type="button" data-act="view" data-arg="board">Cancel</button>` : ''}</div>
+    <div class="grid"><label class="f">Event name (guests see this)<input name="name" required maxlength="120" value="${esc(v.name)}" placeholder="Amal & Karissa's Wedding"></label><label class="f">Date<input name="event_date" type="date" value="${esc(v.event_date || '')}"></label></div>
+    <label class="f">Welcome line on the request page (optional)<input name="welcome" maxlength="300" value="${esc(v.welcome)}" placeholder="Send us your dance-floor favorites!"></label>
+    <label class="f">Do-not-play list (one per line, Song — Artist or just an artist). In Gig Desk: Music tab → Copy for request board.<textarea name="dnp" placeholder="Cupid Shuffle — Cupid&#10;Pitbull">${esc(v.dnp)}</textarea></label>
+    <label class="row small"><input type="checkbox" name="clean_only"${v.clean_only ? ' checked' : ''}> Clean edits only (shows a reminder on every request)</label>
+    <div class="row"><button class="btn pri" type="submit"${S.busy ? ' disabled' : ''}>${isNew ? 'Create and get QR code' : 'Save settings'}</button>${!isNew ? (S.confirm === 'del' ? `<span class="small">Delete this event and all its requests?</span><button class="btn danger sm" type="button" data-act="delEvent">Delete</button><button class="btn ghost sm" type="button" data-act="confirm" data-arg="">Keep</button>` : `<button class="btn ghost sm danger" type="button" data-act="confirm" data-arg="del">Delete event</button>`) : ''}</div></form>`;
+}
+function reqCard(r, e){
+  const rules = lines(e.dnp).map(parseReq); const nq = nrm(r.song + ' ' + r.artist); const bad = rules.filter(x => hits(x, nq));
+  const acts = r.status === 'new' ? `<button class="btn ok sm" data-act="st" data-arg="${r.id}|queued">Queue</button><button class="btn sm" data-act="st" data-arg="${r.id}|played">Played</button><button class="btn ghost sm" data-act="st" data-arg="${r.id}|skipped">Skip</button>`
+    : r.status === 'queued' ? `<button class="btn ok sm" data-act="st" data-arg="${r.id}|played">Played</button><button class="btn ghost sm" data-act="st" data-arg="${r.id}|skipped">Skip</button><button class="btn ghost sm" data-act="st" data-arg="${r.id}|new">Back</button>`
+    : `<button class="btn ghost sm" data-act="st" data-arg="${r.id}|new">Undo</button>`;
+  return `<div class="rq${bad.length ? ' bad' : ''}${S.fresh.has(r.id) ? ' fresh' : ''}"><div class="votes">${r.votes}<span>${r.votes === 1 ? 'ask' : 'asks'}</span></div>
+    <div style="min-width:0"><div class="t">${esc(r.song)}${r.artist ? ` <span class="muted">· ${esc(r.artist)}</span>` : ''}</div>
+      ${bad.length ? `<div class="warnline">⛔ Do not play · client listed “${esc(bad.map(b => b.raw).join('”, “'))}”</div>` : ''}
+      ${e.clean_only && !bad.length ? `<div class="small" style="color:var(--warn)">Clean edit only${dirty(r.song) ? ' · title says explicit' : ''}</div>` : ''}
+      <div class="meta">${r.guest_name ? 'From ' + esc(r.guest_name) + ' · ' : ''}${ago(r.created_at)}${r.note ? ` · “${esc(r.note)}”` : ''}</div></div>
+    <div class="acts">${acts}</div></div>`;
+}
+function boardView(){
+  const e = ev();
+  if (!S.events.length || S.view === 'new') return eventForm(null);
+  if (!e) { S.evId = S.events[0].id; return boardView(); }
+  if (S.view === 'settings') return eventForm(e);
+  const by = st => S.reqs.filter(r => r.status === st);
+  const sorted = {new: by('new').sort((a, b) => b.votes - a.votes || new Date(b.created_at) - new Date(a.created_at)), queued: by('queued').sort((a, b) => b.votes - a.votes || new Date(a.created_at) - new Date(b.created_at)), played: by('played').sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at)), skipped: by('skipped').sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at))};
+  const list = sorted[S.tab] || [];
+  const url = guestUrl(e.id);
+  return `${S.events.length > 1 ? `<div class="evchips">${S.events.map(x => `<button class="${x.id === e.id ? 'on' : ''}" data-act="pick" data-arg="${esc(x.id)}">${esc(x.name)}</button>`).join('')}<button data-act="view" data-arg="new">+ New event</button></div>` : ''}
+  <div class="panel"><div class="spread"><div><h1>${esc(e.name)}</h1><p class="small muted">${e.event_date ? new Date(e.event_date + 'T12:00').toLocaleDateString('en-US', {weekday: 'long', month: 'long', day: 'numeric'}) + ' · ' : ''}${lines(e.dnp).length} on the do-not-play list${e.clean_only ? ' · clean edits only' : ''}</p></div>
+    <div class="row"><button class="btn ${e.is_open ? 'ok' : ''}" data-act="toggle">${e.is_open ? '● Requests open' : '○ Requests closed'}</button><button class="btn ghost sm" data-act="view" data-arg="settings">Settings</button>${S.events.length === 1 ? '<button class="btn ghost sm" data-act="view" data-arg="new">+ New event</button>' : ''}</div></div>
+    <details${S.reqs.length ? '' : ' open'}><summary>QR code and guest link</summary><div class="qrwrap" style="margin-top:12px"><canvas id="qr" width="164" height="164" aria-label="QR code for the request page"></canvas><div style="display:flex;flex-direction:column;gap:8px;min-width:0;flex:1"><div class="link">${esc(url)}</div><div class="row"><button class="btn sm" data-act="copy">Copy link</button><button class="btn sm" data-act="png">Download QR</button><button class="btn pri sm" data-act="sign">Download table sign (PDF)</button></div><p class="small muted">Print the sign for tables and the bar, or show the QR on a screen. Anyone with the link can send requests while requests are open.</p></div></div></details></div>
+  <div class="tabs" role="tablist">${[['new', 'New'], ['queued', 'Queue'], ['played', 'Played'], ['skipped', 'Skipped']].map(([k, l]) => `<button role="tab" class="${S.tab === k ? 'on' : ''}" data-act="tab" data-arg="${k}">${l}<span class="count">${sorted[k].length}</span></button>`).join('')}</div>
+  <div style="display:flex;flex-direction:column;gap:8px">${list.length ? list.map(r => reqCard(r, e)).join('') : `<div class="empty">${S.tab === 'new' ? (e.is_open ? 'No new requests yet. They appear here the moment a guest sends one.' : 'Requests are closed. Open them to start taking requests.') : 'Nothing here yet.'}</div>`}</div>
+  <div class="row small muted"><label class="row"><input type="checkbox" data-act="buzz"${S.buzz ? ' checked' : ''}> Vibrate on new requests (phones)</label><label class="row"><input type="checkbox" data-act="wake"${S.wake ? ' checked' : ''}> Keep screen on</label></div>`;
+}
+function render(){
+  const app = $('#app');
+  if (!cfg.supabaseUrl || !cfg.supabaseAnonKey) return app.innerHTML = shell(`<div class="panel auth"><h1>Almost ready</h1><p class="muted">Add your Supabase project address and public key to <span class="mono">config.js</span> to turn on song requests.</p></div>`);
+  if (S.loading) return app.innerHTML = shell('<p class="muted">Loading…</p>');
+  const y = window.scrollY;
+  app.innerHTML = shell(S.session && S.authMode !== 'recover' ? boardView() : authView());
+  window.scrollTo(0, y); drawQr();
+  const n = S.reqs.filter(r => r.status === 'new').length; document.title = (n ? `(${n}) ` : '') + 'Gig Desk Requests';
+}
+function qrFor(text){ const q = qrcode(0, 'M'); q.addData(text); q.make(); return q; }
+function drawQr(){ const c = $('#qr'), e = ev(); if (!c || !e || !window.qrcode) return; const q = qrFor(guestUrl(e.id)), n = q.getModuleCount(), px = Math.floor(164 / n), off = Math.floor((164 - px * n) / 2), x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, 164, 164); x.fillStyle = '#000'; for (let r = 0; r < n; r++) for (let k = 0; k < n; k++) if (q.isDark(r, k)) x.fillRect(off + k * px, off + r * px, px, px); }
+function qrCanvas(size){ const q = qrFor(guestUrl(ev().id)), n = q.getModuleCount(), quiet = 4, px = Math.floor(size / (n + quiet * 2)), c = document.createElement('canvas'); c.width = c.height = px * (n + quiet * 2); const x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height); x.fillStyle = '#000'; for (let r = 0; r < n; r++) for (let k = 0; k < n; k++) if (q.isDark(r, k)) x.fillRect((k + quiet) * px, (r + quiet) * px, px, px); return c; }
+const slug = s => String(s || 'event').replace(/[^A-Za-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 50) || 'event';
+function download(name, url){ const a = document.createElement('a'); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove(); }
+function loadScript(src){ return new Promise((res, rej) => { const s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = rej; document.head.appendChild(s); }); }
+async function sign(){
+  const e = ev(); if (!window.jspdf) await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js');
+  const d = new window.jspdf.jsPDF({unit: 'pt', format: 'letter'}), W = 612, clean = s => String(s).replace(/[^\x20-\x7E\xA0-\xFF]/g, '').replace(/[’‘]/g, "'");
+  d.setFillColor(217, 84, 10); d.rect(0, 0, W, 10, 'F');
+  d.setFont('helvetica', 'bold'); d.setFontSize(46); d.setTextColor(20, 22, 32); d.text('Request a song', W / 2, 120, {align: 'center'});
+  d.setFont('helvetica', 'normal'); d.setFontSize(18); d.setTextColor(90, 96, 116); d.text(d.splitTextToSize(clean(e.name), 480), W / 2, 156, {align: 'center'});
+  const c = qrCanvas(1200); d.addImage(c.toDataURL('image/png'), 'PNG', (W - 340) / 2, 196, 340, 340);
+  d.setTextColor(20, 22, 32); d.setFontSize(20); d.setFont('helvetica', 'bold'); d.text('Point your phone camera here', W / 2, 580, {align: 'center'});
+  d.setFont('helvetica', 'normal'); d.setFontSize(14); d.setTextColor(90, 96, 116); d.text('Type your song, add a shout-out, tap Send. No app needed.', W / 2, 606, {align: 'center'});
+  if (e.welcome) d.text(d.splitTextToSize(clean(e.welcome), 460), W / 2, 640, {align: 'center'});
+  d.setFontSize(10); d.text(guestUrl(e.id), W / 2, 742, {align: 'center'});
+  d.save(slug(e.name) + '-request-sign.pdf');
+}
+
+/* ---------- data ---------- */
+async function loadEvents(){ const {data, error} = await db.from('rq_events').select('*').order('created_at', {ascending: false}); if (error){ toast('Couldn’t load your events.'); return; } S.events = data || []; if (!S.events.some(e => e.id === S.evId)) S.evId = S.events[0]?.id || ''; }
+async function loadReqs(first){
+  if (!S.evId){ S.reqs = []; return; }
+  const {data, error} = await db.from('rq_requests').select('*').eq('event_id', S.evId).order('created_at', {ascending: false}).limit(1000);
+  if (error) return; const before = new Set(S.reqs.map(r => r.id)); S.reqs = data || [];
+  if (!first){ const nu = S.reqs.filter(r => !before.has(r.id) && r.status === 'new'); if (nu.length) arrived(nu); } S.reqs.forEach(r => S.seen.add(r.id));
+}
+function arrived(list){ list.forEach(r => { S.fresh.add(r.id); setTimeout(() => { S.fresh.delete(r.id); }, 8000); }); if (S.buzz && navigator.vibrate) try { navigator.vibrate([120, 60, 120]); } catch {} toast(list.length === 1 ? `New request: ${list[0].song}` : `${list.length} new requests`); }
+function subscribe(){
+  if (chan){ db.removeChannel(chan); chan = null; } if (!S.evId) return;
+  chan = db.channel('rq-' + S.evId).on('postgres_changes', {event: '*', schema: 'public', table: 'rq_requests', filter: 'event_id=eq.' + S.evId}, p => {
+    if (p.eventType === 'DELETE'){ S.reqs = S.reqs.filter(r => r.id !== p.old.id); }
+    else { const r = p.new, i = S.reqs.findIndex(x => x.id === r.id); const isNew = i < 0; if (isNew) S.reqs.unshift(r); else S.reqs[i] = r; if (isNew && r.status === 'new') arrived([r]); else if (!isNew && p.eventType === 'UPDATE' && r.votes > (p.old?.votes || 0) && r.status === 'new') arrived([r]); }
+    softRender();
+  }).subscribe(st => { S.live = st === 'SUBSCRIBED' ? 'live' : 'reconnecting'; softRender(); });
+}
+// If live updates drop (weak venue Wi-Fi), fetch every 15 seconds until they're back.
+poll = setInterval(async () => { if (S.session && S.evId && S.live !== 'live' && !document.hidden){ await loadReqs(false); softRender(); } }, 15000);
+function softRender(){ const a = document.activeElement; if (a && a.matches('input,textarea,select') && a.type !== 'checkbox') return; render(); }
+async function enter(){ await loadEvents(); await loadReqs(true); subscribe(); render(); }
+
+/* ---------- events ---------- */
+document.addEventListener('click', async e => {
+  const b = e.target.closest('[data-act]'); if (!b) return; const a = b.dataset.act, arg = b.dataset.arg;
+  if (b.type === 'checkbox'){
+    if (a === 'buzz'){ S.buzz = b.checked; store.set('gdrq.buzz', S.buzz); }
+    if (a === 'wake'){ if (b.checked){ try { S.wake = await navigator.wakeLock.request('screen'); S.wake.addEventListener('release', () => { S.wake = null; }); } catch { b.checked = false; toast('This browser can’t keep the screen on.'); } } else { try { await S.wake?.release(); } catch {} S.wake = null; } }
+    return;
+  }
+  e.preventDefault();
+  if (a === 'mode'){ S.authMode = arg; S.authErr = ''; render(); }
+  if (a === 'signout'){ await db.auth.signOut(); }
+  if (a === 'tab'){ S.tab = arg; render(); }
+  if (a === 'view'){ S.view = arg; S.confirm = ''; render(); }
+  if (a === 'confirm'){ S.confirm = arg; render(); }
+  if (a === 'pick'){ S.evId = arg; store.set('gdrq.ev', arg); S.view = 'board'; S.reqs = []; await loadReqs(true); subscribe(); render(); }
+  if (a === 'st'){ const [id, st] = arg.split('|'); const r = S.reqs.find(x => x.id === id); if (!r) return; const old = r.status; r.status = st; r.updated_at = new Date().toISOString(); render(); const {error} = await db.from('rq_requests').update({status: st, updated_at: r.updated_at}).eq('id', id); if (error){ r.status = old; render(); toast('That change didn’t save. Check your connection.'); } }
+  if (a === 'toggle'){ const x = ev(); const v = !x.is_open; x.is_open = v; render(); const {error} = await db.from('rq_events').update({is_open: v}).eq('id', x.id); if (error){ x.is_open = !v; render(); toast('Couldn’t change that. Check your connection.'); } else toast(v ? 'Requests are open' : 'Requests are closed'); }
+  if (a === 'copy'){ const u = guestUrl(ev().id); try { await navigator.clipboard.writeText(u); toast('Link copied'); } catch { toast('Select the link above and copy it.'); } }
+  if (a === 'png'){ download(slug(ev().name) + '-request-qr.png', qrCanvas(1200).toDataURL('image/png')); }
+  if (a === 'sign'){ try { await sign(); } catch { toast('Couldn’t make the sign. Check your connection and try again.'); } }
+  if (a === 'delEvent'){ const x = ev(); const {error} = await db.from('rq_events').delete().eq('id', x.id); if (error){ toast('Couldn’t delete the event.'); return; } S.confirm = ''; S.view = 'board'; await loadEvents(); await loadReqs(true); subscribe(); render(); toast('Event deleted'); }
+});
+document.addEventListener('submit', async e => {
+  e.preventDefault(); const f = e.target;
+  if (f.id === 'signin'){ S.busy = true; S.authErr = ''; render(); const {error} = await db.auth.signInWithPassword({email: f.querySelector('#em').value, password: f.querySelector('#pw').value}); S.busy = false; if (error){ S.authErr = /confirm/i.test(error.message) ? 'Confirm your email first, using the link Supabase sent you.' : 'That email and password don’t match.'; render(); } }
+  if (f.id === 'forgot'){ S.busy = true; render(); const {error} = await db.auth.resetPasswordForEmail(f.querySelector('#em').value, {redirectTo: location.href.split('#')[0]}); S.busy = false; S.authErr = error ? 'Couldn’t send the email. Try again in a few minutes.' : 'If that email has an account, a reset link is on its way.'; render(); }
+  if (f.id === 'setpw'){ const {error} = await db.auth.updateUser({password: f.querySelector('#pw1').value}); if (error){ S.authErr = 'Use at least 8 characters and try again.'; render(); } else { S.authMode = 'signin'; toast('Password saved'); await enter(); } }
+  if (f.id === 'evform'){
+    const d = Object.fromEntries(new FormData(f)); const row = {name: (d.name || '').trim(), event_date: d.event_date || null, welcome: (d.welcome || '').trim(), dnp: d.dnp || '', clean_only: !!d.clean_only};
+    if (!row.name) return toast('Give the event a name.'); S.busy = true; render();
+    const id = f.dataset.id; const q = id ? db.from('rq_events').update(row).eq('id', id).select().single() : db.from('rq_events').insert(row).select().single();
+    const {data, error} = await q; S.busy = false;
+    if (error){ toast('Couldn’t save. Check your connection.'); render(); return; }
+    await loadEvents(); S.evId = data.id; store.set('gdrq.ev', data.id); S.view = 'board'; await loadReqs(true); subscribe(); render(); toast(id ? 'Settings saved' : 'Event created. Your QR code is ready.');
+  }
+});
+document.addEventListener('visibilitychange', async () => { if (!document.hidden && S.session){ await loadReqs(false); render(); if (S.wake === null && $('[data-act="wake"]')?.checked){ try { S.wake = await navigator.wakeLock.request('screen'); } catch {} } } });
+setInterval(() => { if (S.session && !document.hidden) softRender(); }, 60000);
+
+/* ---------- start ---------- */
+(async () => {
+  if (!cfg.supabaseUrl || !cfg.supabaseAnonKey || !window.supabase){ S.loading = false; return render(); }
+  db = window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseAnonKey);
+  db.auth.onAuthStateChange(async (evt, session) => {
+    if (evt === 'PASSWORD_RECOVERY'){ S.session = session; S.authMode = 'recover'; S.loading = false; return render(); }
+    const had = !!S.session; S.session = session;
+    if (session && !had){ S.loading = false; await enter(); }
+    if (!session){ if (chan){ db.removeChannel(chan); chan = null; } S.events = []; S.reqs = []; S.loading = false; render(); }
+  });
+  const {data} = await db.auth.getSession(); if (!data.session){ S.loading = false; render(); }
+})();
+})();
+</script>
+</body>
+</html>
