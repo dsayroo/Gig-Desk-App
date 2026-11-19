@@ -259,10 +259,22 @@ setInterval(() => { if (S.session && !document.hidden) softRender(); }, 60000);
 (async () => {
   if (!cfg.supabaseUrl || !cfg.supabaseAnonKey || !window.supabase){ S.loading = false; return render(); }
   db = window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseAnonKey);
-  db.auth.onAuthStateChange(async (evt, session) => {
+  db.auth.onAuthStateChange((evt, session) => {
     if (evt === 'PASSWORD_RECOVERY'){ S.session = session; S.authMode = 'recover'; S.loading = false; return render(); }
     const had = !!S.session; S.session = session;
-    if (session && !had){ S.loading = false; await enter(); }
+    if (session && !had){
+      S.loading = false;
+      // Leave the auth callback before calling PostgREST/realtime APIs; those APIs
+      // can wait on the same auth lock during a persisted-session page reload.
+      setTimeout(() => {
+        if (S.session?.user?.id !== session.user.id) return;
+        enter().catch(error => {
+          console.error('Could not initialize DJ board', error);
+          S.loading = false; S.live = 'reconnecting';
+          toast('Couldn’t load your event. Check your connection and refresh.'); render();
+        });
+      }, 0);
+    }
     if (!session){ if (chan){ db.removeChannel(chan); chan = null; } S.events = []; S.reqs = []; S.loading = false; render(); }
   });
   const {data} = await db.auth.getSession(); if (!data.session){ S.loading = false; render(); }
