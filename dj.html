@@ -71,6 +71,7 @@ input[type=checkbox]{width:18px;height:18px;accent-color:var(--accent)}
 .rq .acts{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
 @media (max-width:560px){.rq{grid-template-columns:44px minmax(0,1fr)}.rq .acts{grid-column:1/-1;justify-content:flex-start}}
 .warnline{font-size:.84rem;color:var(--live);font-weight:600}
+.reviewline{font-size:.84rem;color:var(--warn);font-weight:600}
 .empty{text-align:center;color:var(--muted);padding:32px 12px}
 .qrwrap{display:flex;gap:16px;align-items:center;flex-wrap:wrap}
 .qrwrap canvas{background:#fff;border-radius:8px;padding:8px;width:156px;height:156px;image-rendering:pixelated}
@@ -90,6 +91,7 @@ details summary{cursor:pointer;font-weight:600}
 <script src="config.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
+<script src="song-matching.js"></script>
 <script>
 (() => {
 "use strict";
@@ -99,11 +101,8 @@ const store = {get(k){ try { return JSON.parse(localStorage.getItem(k)); } catch
 const cfg = window.GD_CONFIG || {};
 const logo = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>`;
 
-/* same do-not-play matching as Gig Desk */
-const nrm = s => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\([^)]*\)|\[[^\]]*\]/g, ' ').replace(/\b(feat|ft|featuring)\b.*$/, ' ').replace(/&/g, ' and ').replace(/[^a-z0-9]+/g, ' ').trim();
-function parseReq(raw){ const s = String(raw || '').replace(/[“”"]/g, '').trim(); const p = s.split(/\s+[—–-]\s+|\s*[—–]\s*/).map(x => x.trim()).filter(Boolean); const song = p.length >= 2 ? p[0] : '', artist = p.length >= 2 ? p.slice(1).join(' ') : ''; return {raw: s, ns: nrm(song), na: nrm(artist), nq: nrm(s)}; }
+const SongMatching = window.GigDeskSongMatching;
 const lines = t => String(t || '').split(/\n|;/).map(x => x.replace(/^\s*(?:[-•*x]|\d+[.)])\s+/, '').trim()).filter(Boolean);
-function hits(r, nq){ if (!nq || nq.length < 2) return false; if (r.ns && r.na) return (r.ns.length >= 3 && nq.includes(r.ns)) || (nq.length >= 4 && r.ns.includes(nq)); return !!r.nq && ((r.nq.length >= 3 && (' ' + nq + ' ').includes(' ' + r.nq + ' ')) || (nq.length >= 4 && r.nq === nq)); }
 const dirty = s => /\b(explicit|dirty|uncensored)\b/i.test(s);
 
 const S = {session: null, events: [], evId: store.get('gdrq.ev') || '', reqs: [], tab: 'new', view: 'board', loading: true, authMode: 'signin', authErr: '', busy: false, seen: new Set(), fresh: new Set(), confirm: '', wake: null, buzz: store.get('gdrq.buzz') ?? true, live: 'connecting'};
@@ -128,18 +127,22 @@ function eventForm(e){
   return `<form class="panel" id="evform" data-id="${esc(e?.id || '')}"><div class="spread"><h2>${isNew ? 'New request event' : 'Event settings'}</h2>${S.events.length ? `<button class="btn ghost sm" type="button" data-act="view" data-arg="board">Cancel</button>` : ''}</div>
     <div class="grid"><label class="f">Event name (guests see this)<input name="name" required maxlength="120" value="${esc(v.name)}" placeholder="Amal & Karissa's Wedding"></label><label class="f">Date<input name="event_date" type="date" value="${esc(v.event_date || '')}"></label></div>
     <label class="f">Welcome line on the request page (optional)<input name="welcome" maxlength="300" value="${esc(v.welcome)}" placeholder="Send us your dance-floor favorites!"></label>
-    <label class="f">Do-not-play list (one per line, Song — Artist or just an artist). In Gig Desk: Music tab → Copy for request board.<textarea name="dnp" placeholder="Cupid Shuffle — Cupid&#10;Pitbull">${esc(v.dnp)}</textarea></label>
+    <label class="f">Do-not-play list (one per line: Song — Artist, or Artist: Name). In Gig Desk: Music tab → Copy for request board. Unlabeled entries are flagged for review.<textarea name="dnp" placeholder="Cupid Shuffle — Cupid&#10;Pitbull">${esc(v.dnp)}</textarea></label>
     <label class="row small"><input type="checkbox" name="clean_only"${v.clean_only ? ' checked' : ''}> Clean edits only (shows a reminder on every request)</label>
     <div class="row"><button class="btn pri" type="submit"${S.busy ? ' disabled' : ''}>${isNew ? 'Create and get QR code' : 'Save settings'}</button>${!isNew ? (S.confirm === 'del' ? `<span class="small">Delete this event and all its requests?</span><button class="btn danger sm" type="button" data-act="delEvent">Delete</button><button class="btn ghost sm" type="button" data-act="confirm" data-arg="">Keep</button>` : `<button class="btn ghost sm danger" type="button" data-act="confirm" data-arg="del">Delete event</button>`) : ''}</div></form>`;
 }
 function reqCard(r, e){
-  const rules = lines(e.dnp).map(parseReq); const nq = nrm(r.song + ' ' + r.artist); const bad = rules.filter(x => hits(x, nq));
+  const rules = SongMatching.parseRules(e.dnp); const check = SongMatching.assessRequest(r.song, r.artist, rules); const bad = check.matches;
+  const review = check.issues.includes('swapped_title_artist') ? 'Title and artist may be swapped; check the request'
+    : check.issues.includes('artist_may_be_title') ? 'Title matches a protected artist name; confirm it is a song'
+    : (!r.artist || r.needs_review) ? 'Artist not supplied; confirm the track before playing' : '';
   const acts = r.status === 'new' ? `<button class="btn ok sm" data-act="st" data-arg="${r.id}|queued">Queue</button><button class="btn sm" data-act="st" data-arg="${r.id}|played">Played</button><button class="btn ghost sm" data-act="st" data-arg="${r.id}|skipped">Skip</button>`
     : r.status === 'queued' ? `<button class="btn ok sm" data-act="st" data-arg="${r.id}|played">Played</button><button class="btn ghost sm" data-act="st" data-arg="${r.id}|skipped">Skip</button><button class="btn ghost sm" data-act="st" data-arg="${r.id}|new">Back</button>`
     : `<button class="btn ghost sm" data-act="st" data-arg="${r.id}|new">Undo</button>`;
   return `<div class="rq${bad.length ? ' bad' : ''}${S.fresh.has(r.id) ? ' fresh' : ''}"><div class="votes">${r.votes}<span>${r.votes === 1 ? 'ask' : 'asks'}</span></div>
     <div style="min-width:0"><div class="t">${esc(r.song)}${r.artist ? ` <span class="muted">· ${esc(r.artist)}</span>` : ''}</div>
       ${bad.length ? `<div class="warnline">⛔ Do not play · client listed “${esc(bad.map(b => b.raw).join('”, “'))}”</div>` : ''}
+      ${review ? `<div class="reviewline">⚠ Review before play · ${esc(review)}</div>` : ''}
       ${e.clean_only && !bad.length ? `<div class="small" style="color:var(--warn)">Clean edit only${dirty(r.song) ? ' · title says explicit' : ''}</div>` : ''}
       <div class="meta">${r.guest_name ? 'From ' + esc(r.guest_name) + ' · ' : ''}${ago(r.created_at)}${r.note ? ` · “${esc(r.note)}”` : ''}</div></div>
     <div class="acts">${acts}</div></div>`;
@@ -151,12 +154,13 @@ function boardView(){
   if (S.view === 'settings') return eventForm(e);
   const by = st => S.reqs.filter(r => r.status === st);
   const sorted = {new: by('new').sort((a, b) => b.votes - a.votes || new Date(b.created_at) - new Date(a.created_at)), queued: by('queued').sort((a, b) => b.votes - a.votes || new Date(a.created_at) - new Date(b.created_at)), played: by('played').sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at)), skipped: by('skipped').sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at))};
-  const list = sorted[S.tab] || [];
+  const list = sorted[S.tab] || []; const invalidRules = SongMatching.parseRules(e.dnp).filter(rule => rule.kind === 'review');
   const url = guestUrl(e.id);
   return `${S.events.length > 1 ? `<div class="evchips">${S.events.map(x => `<button class="${x.id === e.id ? 'on' : ''}" data-act="pick" data-arg="${esc(x.id)}">${esc(x.name)}</button>`).join('')}<button data-act="view" data-arg="new">+ New event</button></div>` : ''}
   <div class="panel"><div class="spread"><div><h1>${esc(e.name)}</h1><p class="small muted">${e.event_date ? new Date(e.event_date + 'T12:00').toLocaleDateString('en-US', {weekday: 'long', month: 'long', day: 'numeric'}) + ' · ' : ''}${lines(e.dnp).length} on the do-not-play list${e.clean_only ? ' · clean edits only' : ''}</p></div>
     <div class="row"><button class="btn ${e.is_open ? 'ok' : ''}" data-act="toggle">${e.is_open ? '● Requests open' : '○ Requests closed'}</button><button class="btn ghost sm" data-act="view" data-arg="settings">Settings</button>${S.events.length === 1 ? '<button class="btn ghost sm" data-act="view" data-arg="new">+ New event</button>' : ''}</div></div>
     <details${S.reqs.length ? '' : ' open'}><summary>QR code and guest link</summary><div class="qrwrap" style="margin-top:12px"><canvas id="qr" width="164" height="164" aria-label="QR code for the request page"></canvas><div style="display:flex;flex-direction:column;gap:8px;min-width:0;flex:1"><div class="link">${esc(url)}</div><div class="row"><button class="btn sm" data-act="copy">Copy link</button><button class="btn sm" data-act="png">Download QR</button><button class="btn pri sm" data-act="sign">Download table sign (PDF)</button></div><p class="small muted">Print the sign for tables and the bar, or show the QR on a screen. Anyone with the link can send requests while requests are open.</p></div></div></details></div>
+  ${invalidRules.length ? `<div class="note" role="status"><b>Review do-not-play entries:</b> ${esc(invalidRules.map(rule => rule.raw).join(' · '))}. Use “Song — Artist” or “Artist: Name”; unclear entries are not matched.</div>` : ''}
   <div class="tabs" role="tablist">${[['new', 'New'], ['queued', 'Queue'], ['played', 'Played'], ['skipped', 'Skipped']].map(([k, l]) => `<button role="tab" class="${S.tab === k ? 'on' : ''}" data-act="tab" data-arg="${k}">${l}<span class="count">${sorted[k].length}</span></button>`).join('')}</div>
   <div style="display:flex;flex-direction:column;gap:8px">${list.length ? list.map(r => reqCard(r, e)).join('') : `<div class="empty">${S.tab === 'new' ? (e.is_open ? 'No new requests yet. They appear here the moment a guest sends one.' : 'Requests are closed. Open them to start taking requests.') : 'Nothing here yet.'}</div>`}</div>
   <div class="row small muted"><label class="row"><input type="checkbox" data-act="buzz"${S.buzz ? ' checked' : ''}> Vibrate on new requests (phones)</label><label class="row"><input type="checkbox" data-act="wake"${S.wake ? ' checked' : ''}> Keep screen on</label></div>`;

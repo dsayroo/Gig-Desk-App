@@ -26,12 +26,24 @@ create table if not exists public.rq_requests (
   guest_name  text not null default '' check (char_length(guest_name) <= 60),
   note        text not null default '' check (char_length(note) <= 200),
   song_key    text not null,
+  needs_review boolean not null default false,
   votes       int  not null default 1,
   status      text not null default 'new' check (status in ('new', 'queued', 'played', 'skipped')),
   device      text not null default '' check (char_length(device) <= 64),
   created_at  timestamptz not null default now(),
   updated_at  timestamptz not null default now()
 );
+-- Upgrade existing installs safely and surface older requests that lack an artist.
+alter table public.rq_requests add column if not exists needs_review boolean not null default false;
+update public.rq_requests set needs_review = true where btrim(artist) = '' and not needs_review;
+update public.rq_requests
+set song_key = btrim(regexp_replace(lower(replace(song, '&', ' and ')), '[^[:alnum:]]+', ' ', 'g')) || '|' ||
+               btrim(regexp_replace(lower(replace(artist, '&', ' and ')), '[^[:alnum:]]+', ' ', 'g'))
+where song_key is distinct from (
+  btrim(regexp_replace(lower(replace(song, '&', ' and ')), '[^[:alnum:]]+', ' ', 'g')) || '|' ||
+  btrim(regexp_replace(lower(replace(artist, '&', ' and ')), '[^[:alnum:]]+', ' ', 'g'))
+);
+
 create index if not exists rq_requests_event_idx on public.rq_requests (event_id, created_at desc);
 
 alter table public.rq_events   enable row level security;
@@ -74,22 +86,21 @@ begin
   if p_device <> '' and (select count(*) from public.rq_requests r
       where r.event_id = p_code and r.device = p_device and r.created_at > now() - interval '10 minutes') >= 5 then return 'slow_down'; end if;
   if (select count(*) from public.rq_requests r where r.event_id = p_code and r.created_at > now() - interval '1 hour') >= 400 then return 'busy'; end if;
-  v_key := regexp_replace(lower(p_song), '[^a-z0-9]+', '', 'g') || '|' || regexp_replace(lower(p_artist), '[^a-z0-9]+', '', 'g');
-  -- Same song already waiting? Count it as another vote instead of a duplicate.
+  v_key := btrim(regexp_replace(lower(replace(p_song, '&', ' and ')), '[^[:alnum:]]+', ' ', 'g')) || '|' || btrim(regexp_replace(lower(replace(p_artist, '&', ' and ')), '[^[:alnum:]]+', ' ', 'g'));
+  -- Only fully specified exact title+artist pairs may share votes. Missing artists need DJ review.
   with target as (
     select r.id from public.rq_requests r
     where r.event_id = p_code and r.status in ('new', 'queued')
-      and (r.song_key = v_key or (split_part(r.song_key, '|', 1) = split_part(v_key, '|', 1) and (p_artist = '' or split_part(r.song_key, '|', 2) = '')))
+      and p_artist <> '' and r.song_key = v_key
     order by r.created_at limit 1
   ), bumped as (
     update public.rq_requests r set votes = r.votes + 1, updated_at = now(),
-      artist = case when r.artist = '' then p_artist else r.artist end,
       note = case when p_note <> '' and char_length(r.note) + char_length(p_note) <= 195 then btrim(r.note || ' / ' || p_note, ' /') else r.note end
     from target where r.id = target.id returning r.id
   ) select id into v_id from bumped;
   if v_id is not null then return 'added_vote'; end if;
-  insert into public.rq_requests (event_id, song, artist, guest_name, note, song_key, device)
-  values (p_code, p_song, p_artist, p_name, p_note, v_key, p_device);
+  insert into public.rq_requests (event_id, song, artist, guest_name, note, song_key, needs_review, device)
+  values (p_code, p_song, p_artist, p_name, p_note, v_key, (p_artist = ''), p_device);
   return 'ok';
 end; $$;
 
